@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#edf3ed">
+    <title>문제 풀이 | AHA</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/script.js" defer></script>
+  </head>
+  <body class="solve-page">
+    <header class="topbar">
+      <div class="brand-group">
+        <a class="wordmark" href="/" aria-label="AHA 홈">AHA<span>.</span></a>
+        <a class="back-home" href="/">홈으로</a>
+      </div>
+      <div class="progress-panel" aria-label="오늘의 학습 진행도">
+        <div class="progress-copy">
+          <span>오늘의 성장</span>
+          <strong id="xp-label">0 / 100 XP</strong>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+      </div>
+    </header>
+
+    <main class="solver-page-content">
+      <section class="solver-intro" aria-labelledby="solver-title">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-dot"></span> AHA STUDY CLUB</p>
+          <h1 id="solver-title">어디가 막혔는지부터<br><span>같이 살펴보자.</span></h1>
+          <p class="intro-copy">편한 방식으로 골라줘. 이해될 때까지 다시 설명해줄게.</p>
+        </div>
+        <div class="mini-coach" aria-label="움직이는 아하 수학 코치">
+          <div class="mascot mascot--small" aria-hidden="true">
+            <span class="mascot-antenna"></span>
+            <span class="mascot-face">
+              <span class="mascot-eye mascot-eye-left"></span>
+              <span class="mascot-eye mascot-eye-right"></span>
+              <span class="mascot-mouth"></span>
+            </span>
+            <span class="mascot-body"><span></span></span>
+          </div>
+          <span>아하가 듣고 있어!</span>
+        </div>
+      </section>
+
+      <section class="solver-card" aria-label="수학 문제 풀이">
+        <form id="solve-form">
+          <label class="field-label" for="problem">오늘의 문제 <span>최대 4,000자</span></label>
+          <textarea id="problem" name="problem" rows="4" maxlength="4000" placeholder="예: x^2 - 5x + 6 = 0&#10;&#10;문제의 조건과 질문도 함께 적어줘." required></textarea>
+
+          <fieldset class="mode-picker">
+            <legend>어떤 방식으로 풀어볼까?</legend>
+            <div class="mode-options">
+              <button class="mode-option" type="button" data-mode="key" aria-pressed="false">
+                <span class="mode-icon" aria-hidden="true">✦</span>
+                <span class="mode-copy"><strong>핵심만</strong><small>요점부터 빠르게</small></span>
+              </button>
+              <button class="mode-option is-selected" type="button" data-mode="friend" aria-pressed="true">
+                <span class="mode-icon" aria-hidden="true">☕</span>
+                <span class="mode-copy"><strong>친구처럼</strong><small>편하게 얘기하듯이</small></span>
+              </button>
+              <button class="mode-option" type="button" data-mode="hint" aria-pressed="false">
+                <span class="mode-icon" aria-hidden="true">☝</span>
+                <span class="mode-copy"><strong>힌트만</strong><small>정답 없이 스스로</small></span>
+              </button>
+            </div>
+          </fieldset>
+
+          <div class="form-bottom">
+            <p class="input-hint">괜찮아, 식이 잘 정리되지 않아도 돼.</p>
+            <button id="solve-button" type="submit">
+              <span class="button-label">같이 풀기</span>
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </form>
+
+        <p id="status" class="status" role="status" aria-live="polite" hidden></p>
+
+        <div id="reward" class="reward-banner" role="status" aria-live="polite" hidden>
+          <span class="reward-spark" aria-hidden="true">✦</span>
+          <span id="reward-text"></span>
+        </div>
+
+        <section id="result" class="result" aria-labelledby="result-title" hidden>
+          <div class="result-heading">
+            <div>
+              <p class="result-kicker">AHA CHALKBOARD <span id="result-mode">친구처럼</span></p>
+              <h2 id="result-title">같이 보면서 풀어보자</h2>
+            </div>
+            <div class="result-actions">
+              <button id="check-button" class="secondary-button" type="button">AHA CHECK</button>
+              <span class="board-stamp" aria-hidden="true">✳</span>
+            </div>
+          </div>
+
+          <div class="result-problem">
+            <span class="result-label">QUESTION</span>
+            <p id="result-problem-text"></p>
+          </div>
+
+          <div class="chalkboard" aria-label="풀이가 천천히 적히는 칠판">
+            <div class="chalkboard-topline">
+              <span><i></i> AHA BOARD</span>
+              <span id="board-status" aria-live="polite">풀이를 준비하고 있어</span>
+            </div>
+            <p id="solution-intro" class="chalk-intro"></p>
+            <div id="solution-steps" class="chalk-steps"></div>
+            <div id="answer-block" class="answer-block" hidden>
+              <span class="answer-label">찾은 답</span>
+              <p id="solution-answer" class="chalk-equation"></p>
+            </div>
+            <button id="reveal-answer-button" class="reveal-answer-button" type="button" hidden>정답도 볼래</button>
+            <p id="answer-reveal-status" class="answer-reveal-status" role="status" aria-live="polite" hidden></p>
+            <p class="board-signoff">모르는 번호를 눌러봐. 다른 방법으로 다시 설명해줄게.</p>
+          </div>
+
+          <div id="check-panel" class="check-panel" role="status" aria-live="polite" hidden></div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>AHA MATH</span>
+      <span>정답보다 중요한 건, 이해하는 순간.</span>
+    </footer>
+  </body>
+</html>
