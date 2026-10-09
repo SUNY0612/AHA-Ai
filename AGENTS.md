@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a small Node.js web application for generating Korean math solutions with the OpenAI API.
+This is a small Node.js web application for generating Korean math solutions with NVIDIA Build's DeepSeek API.
 
 - `server.js` serves the static frontend and exposes `POST /api/solve`.
 - `index.html`, `styles.css`, and `script.js` contain the browser UI, styling, and form/API behavior.
@@ -31,8 +31,8 @@ Automated tests are not yet configured. For manual verification, test an empty p
 
 ## Commit & Pull Request Guidelines
 
-Git history currently contains only `Initial project upload`, so no established commit convention is available. Use concise imperative commit subjects, for example `Handle OpenAI API errors clearly`. Pull requests should describe the behavior change, configuration impact, manual test steps, and include a screenshot for visible UI changes. Never commit `.env` or expose API keys.
+Git history currently contains only `Initial project upload`, so no established commit convention is available. Use concise imperative commit subjects, for example `Handle NVIDIA API errors clearly`. Pull requests should describe the behavior change, configuration impact, manual test steps, and include a screenshot for visible UI changes. Never commit `.env` or expose API keys.
 
 ## Security & Configuration Tips
 
-Set `OPENAI_API_KEY` in a local `.env` file and optionally set `OPENAI_MODEL`; restart the server after changing either value. Keep the key server-side—browser code must call `/api/solve`, not OpenAI directly.
+Set `NVIDIA_API_KEY` and `NVIDIA_MODEL=deepseek-ai/deepseek-v4.1-flash` in a local `.env` file; restart the server after changing either value. Keep the key server-side—browser code must call `/api/solve`, not NVIDIA Build directly.

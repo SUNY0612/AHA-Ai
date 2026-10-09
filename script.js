@@ -28,6 +28,8 @@ let currentMode = "friend";
 let currentProblem = "";
 let currentSolution = null;
 let renderSequence = 0;
+let streamingCardViews = [];
+let activeWritingElement = null;
 
 modeButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -53,6 +55,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   solveButton.disabled = true;
+  const submittedMode = selectedMode;
   buttonLabel.textContent = "아하가 생각 중...";
   result.hidden = true;
   reward.hidden = true;
@@ -60,26 +63,49 @@ form.addEventListener("submit", async (event) => {
   answerRevealStatus.hidden = true;
   showStatus("칠판에 하나씩 적고 있어. 잠깐만 기다려줘!", "loading");
 
+  let streamStarted = false;
   try {
-    const data = await postJson("/api/solve", {
+    const data = await postSolutionStream({
       problem: currentProblem,
-      mode: selectedMode,
+      mode: submittedMode,
+    }, {
+      onStarted: () => {
+        streamStarted = true;
+        currentMode = submittedMode;
+        currentSolution = null;
+        resultProblem.textContent = currentProblem;
+        resultMode.textContent = modeLabels[currentMode];
+        checkButton.hidden = currentMode === "hint";
+        checkButton.disabled = true;
+        result.hidden = false;
+        statusMessage.hidden = true;
+        resetStreamingBoard(currentMode === "hint");
+        result.scrollIntoView({ behavior: "smooth", block: "start" });
+      },
+      onProgress: updateStreamingBoard,
     });
     if (!data.solution || !Array.isArray(data.solution.steps)) {
       throw new Error("풀이 형식이 올바르지 않아요. 다시 한 번 눌러 주세요.");
     }
 
-    currentMode = selectedMode;
+    currentMode = submittedMode;
     currentSolution = data.solution;
     resultProblem.textContent = currentProblem;
     resultMode.textContent = modeLabels[currentMode];
     checkButton.hidden = currentMode === "hint";
-    result.hidden = false;
     statusMessage.hidden = true;
     showReward();
-    await renderChalkboard(currentSolution, currentMode === "hint");
-    result.scrollIntoView({ behavior: "smooth", block: "start" });
+    await finishStreamingBoard(currentSolution, currentMode === "hint");
   } catch (error) {
+    if (streamStarted) {
+      boardStatus.textContent = "풀이를 마저 적지 못했어.";
+      checkButton.hidden = true;
+      checkButton.disabled = false;
+      if (currentMode === "hint") {
+        revealAnswerButton.hidden = false;
+        revealAnswerButton.disabled = false;
+      }
+    }
     showStatus(error.message || "풀이를 가져오지 못했어요. 다시 시도해 줘.", "error");
   } finally {
     solveButton.disabled = false;
@@ -89,35 +115,170 @@ form.addEventListener("submit", async (event) => {
 
 async function renderChalkboard(solution, hideAnswer) {
   const sequence = ++renderSequence;
-  solutionIntro.textContent = solution.intro || "좋아, 문제를 같이 살펴보자.";
+  solutionIntro.textContent = "";
+  solutionIntro.classList.add("is-writing");
   solutionSteps.replaceChildren();
+  streamingCardViews = [];
   answerBlock.hidden = true;
   answerBlock.classList.remove("is-visible");
   solutionAnswer.textContent = "";
   revealAnswerButton.hidden = !hideAnswer;
 
-  const stepCards = (solution.steps || []).map((step, index) => createStepCard(step, index));
-  stepCards.forEach((card) => solutionSteps.append(card));
+  const intro = solution.intro || "좋아, 문제를 같이 살펴보자.";
+  await writeText(solutionIntro, intro, sequence);
+  solutionIntro.classList.remove("is-writing");
 
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  for (const [index, card] of stepCards.entries()) {
+  const stepCards = (solution.steps || []).map((step, index) => createStepCard(step, index));
+  streamingCardViews = stepCards;
+  for (const [index, view] of stepCards.entries()) {
     if (sequence !== renderSequence) return;
     boardStatus.textContent = stepCards.length ? `${index + 1} / ${stepCards.length} 적고 있어` : "풀이를 정리했어";
-    if (!reduceMotion) await wait(650);
-    if (sequence !== renderSequence) return;
-    card.classList.add("is-visible");
+    solutionSteps.append(view.card);
+    view.card.classList.add("is-visible");
+    view.explanation.classList.add("is-writing");
+    await writeText(view.explanation, step.explanation || "이 부분을 다시 같이 살펴보자.", sequence);
+    view.explanation.classList.remove("is-writing");
+    if (view.equation && step.equation) {
+      view.equation.hidden = false;
+      view.equation.classList.add("is-writing");
+      await writeText(view.equation, step.equation, sequence);
+      view.equation.classList.remove("is-writing");
+    }
   }
 
   if (sequence !== renderSequence) return;
   boardStatus.textContent = hideAnswer ? "여기까지만, 이제 네 차례!" : "칠판 풀이 완료";
   if (!hideAnswer && solution.answer) {
-    solutionAnswer.textContent = solution.answer;
     answerBlock.hidden = false;
-    if (!reduceMotion) answerBlock.classList.add("is-visible");
+    answerBlock.classList.add("is-visible");
+    solutionAnswer.classList.add("is-writing");
+    await writeText(solutionAnswer, solution.answer, sequence);
+    solutionAnswer.classList.remove("is-writing");
+  }
+  checkButton.disabled = false;
+}
+
+function resetStreamingBoard(hideAnswer) {
+  renderSequence += 1;
+  activeWritingElement?.classList.remove("is-writing");
+  activeWritingElement = null;
+  streamingCardViews = [];
+  solutionIntro.textContent = "";
+  solutionIntro.classList.remove("is-writing");
+  solutionSteps.replaceChildren();
+  solutionAnswer.textContent = "";
+  solutionAnswer.classList.remove("is-writing");
+  answerBlock.hidden = true;
+  answerBlock.classList.remove("is-visible");
+  revealAnswerButton.hidden = true;
+  boardStatus.textContent = "아하가 풀이를 만들고 있어";
+  checkButton.disabled = true;
+  if (hideAnswer) answerRevealStatus.hidden = true;
+}
+
+function updateStreamingBoard(partial) {
+  if (typeof partial.intro === "string") updateProgressiveText(solutionIntro, partial.intro);
+
+  (partial.steps || []).forEach((partialStep, index) => {
+    let view = streamingCardViews[index];
+    if (!view) {
+      const step = { explanation: "", equation: "" };
+      view = createStepCard(step, index, true);
+      streamingCardViews[index] = view;
+      solutionSteps.append(view.card);
+      view.card.classList.add("is-visible");
+    }
+
+    Object.assign(view.step, partialStep);
+    updateProgressiveText(view.explanation, partialStep.explanation || "");
+    if (view.equation && partialStep.equation) {
+      view.equation.hidden = false;
+      updateProgressiveText(view.equation, partialStep.equation);
+    }
+    if (partialStep.explanation || partialStep.equation) {
+      boardStatus.textContent = `${index + 1}번째 풀이를 적고 있어`;
+    }
+  });
+
+  if (typeof partial.answer === "string" && partial.answer) {
+    answerBlock.hidden = false;
+    answerBlock.classList.add("is-visible");
+    updateProgressiveText(solutionAnswer, partial.answer);
+    boardStatus.textContent = "마지막 답을 적고 있어";
   }
 }
 
-function createStepCard(step, index) {
+async function finishStreamingBoard(solution, hideAnswer) {
+  const sequence = ++renderSequence;
+  updateProgressiveText(solutionIntro, solution.intro || "좋아, 문제를 같이 살펴보자.");
+  solutionIntro.classList.remove("is-writing");
+
+  (solution.steps || []).forEach((step, index) => {
+    let view = streamingCardViews[index];
+    if (!view) {
+      view = createStepCard({ ...step }, index, true);
+      streamingCardViews[index] = view;
+      solutionSteps.append(view.card);
+      view.card.classList.add("is-visible");
+    }
+    Object.assign(view.step, step);
+    updateProgressiveText(view.explanation, step.explanation || "이 부분을 다시 같이 살펴보자.");
+    view.explanation.classList.remove("is-writing");
+    view.numberButton.disabled = false;
+    if (view.equation) {
+      view.equation.hidden = !step.equation;
+      if (step.equation) updateProgressiveText(view.equation, step.equation);
+      view.equation.classList.remove("is-writing");
+    }
+  });
+
+  if (hideAnswer) {
+    answerBlock.hidden = true;
+    revealAnswerButton.hidden = false;
+    boardStatus.textContent = "여기까지만, 이제 네 차례!";
+  } else {
+    revealAnswerButton.hidden = true;
+    answerBlock.hidden = Boolean(!solution.answer);
+    if (solution.answer) {
+      updateProgressiveText(solutionAnswer, solution.answer);
+      solutionAnswer.classList.remove("is-writing");
+      answerBlock.classList.add("is-visible");
+    }
+    boardStatus.textContent = "칠판 풀이 완료";
+  }
+  activeWritingElement?.classList.remove("is-writing");
+  activeWritingElement = null;
+  checkButton.disabled = false;
+  if (sequence !== renderSequence) return;
+}
+
+function updateProgressiveText(element, nextText) {
+  const currentText = element.textContent;
+  if (currentText === nextText) return;
+
+  if (nextText.startsWith(currentText)) {
+    element.append(document.createTextNode(nextText.slice(currentText.length)));
+  } else {
+    element.textContent = nextText;
+  }
+
+  activeWritingElement?.classList.remove("is-writing");
+  activeWritingElement = element;
+  element.classList.add("is-writing");
+}
+
+async function writeText(element, text, sequence) {
+  const characters = typeof Intl.Segmenter === "function"
+    ? [...new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(text)].map((item) => item.segment)
+    : Array.from(text);
+  for (const character of characters) {
+    if (sequence !== renderSequence) return;
+    element.append(document.createTextNode(character));
+    await wait(24);
+  }
+}
+
+function createStepCard(step, index, streaming = false) {
   const card = document.createElement("article");
   card.className = "chalk-step";
 
@@ -127,18 +288,21 @@ function createStepCard(step, index) {
   numberButton.textContent = String(index + 1);
   numberButton.setAttribute("aria-label", `${index + 1}번 풀이 다시 설명 듣기`);
   numberButton.setAttribute("aria-expanded", "false");
+  numberButton.disabled = streaming;
 
   const content = document.createElement("div");
   content.className = "chalk-step-content";
   const explanation = document.createElement("p");
   explanation.className = "chalk-explanation";
-  explanation.textContent = step.explanation || "이 부분을 다시 같이 살펴보자.";
+  explanation.textContent = streaming ? "" : step.explanation || "이 부분을 다시 같이 살펴보자.";
   content.append(explanation);
 
-  if (step.equation) {
-    const equation = document.createElement("p");
+  let equation = null;
+  if (step.equation || streaming) {
+    equation = document.createElement("p");
     equation.className = "chalk-equation";
     equation.textContent = step.equation;
+    equation.hidden = !step.equation;
     content.append(equation);
   }
 
@@ -212,7 +376,7 @@ function createStepCard(step, index) {
   moreButton.addEventListener("click", askAgain);
 
   card.append(numberButton, content, againPanel);
-  return card;
+  return { card, explanation, equation, numberButton, step };
 }
 
 checkButton.addEventListener("click", async () => {
@@ -267,11 +431,19 @@ revealAnswerButton.addEventListener("click", async () => {
   revealAnswerButton.textContent = "정답을 확인 중...";
   answerRevealStatus.hidden = false;
   answerRevealStatus.textContent = "정답을 꺼내고 있어.";
+  let revealFailed = false;
 
   try {
-    const data = await postJson("/api/solve", {
+    const data = await postSolutionStream({
       problem: currentProblem,
       mode: "key",
+    }, {
+      onStarted: () => {
+        currentSolution = null;
+        answerRevealStatus.textContent = "아하가 칠판에 풀이를 적고 있어.";
+        resetStreamingBoard(false);
+      },
+      onProgress: updateStreamingBoard,
     });
     if (!data.solution || !Array.isArray(data.solution.steps)) {
       throw new Error("정답을 확인하지 못했어요.");
@@ -280,15 +452,95 @@ revealAnswerButton.addEventListener("click", async () => {
     resultMode.textContent = "힌트만 · 정답 공개";
     checkButton.hidden = false;
     answerRevealStatus.hidden = true;
-    revealAnswerButton.hidden = true;
-    await renderChalkboard(currentSolution, false);
+    await finishStreamingBoard(currentSolution, false);
   } catch (error) {
+    revealFailed = true;
     answerRevealStatus.textContent = error.message || "정답을 가져오지 못했어. 다시 눌러 줘.";
+    revealAnswerButton.hidden = false;
   } finally {
     revealAnswerButton.disabled = false;
-    if (!revealAnswerButton.hidden) revealAnswerButton.textContent = "정답도 볼래";
+    if (!revealAnswerButton.hidden) revealAnswerButton.textContent = revealFailed ? "정답 다시 보기" : "정답도 볼래";
   }
 });
+
+async function postSolutionStream(payload, handlers = {}) {
+  let response;
+  try {
+    response = await fetch("/api/solve-stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error("서버에 연결하지 못했어. Node 서버가 실행 중인지 확인해 줘.");
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.toLowerCase().includes("application/json")) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error || "풀이 요청을 시작하지 못했어.");
+  }
+  if (!response.ok || !contentType.toLowerCase().includes("text/event-stream") || !response.body) {
+    throw new Error("풀이 스트림을 열지 못했어. 다시 시도해 줘.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let eventName = "message";
+  let dataLines = [];
+  let completion = null;
+
+  const dispatchEvent = () => {
+    if (!dataLines.length) {
+      eventName = "message";
+      return;
+    }
+    let eventData;
+    try {
+      eventData = JSON.parse(dataLines.join("\n"));
+    } catch {
+      dataLines = [];
+      eventName = "message";
+      return;
+    }
+    dataLines = [];
+    const dispatchedName = eventName;
+    eventName = "message";
+
+    if (dispatchedName === "started") handlers.onStarted?.(eventData);
+    if (dispatchedName === "progress") handlers.onProgress?.(eventData);
+    if (dispatchedName === "complete") completion = eventData;
+    if (dispatchedName === "error") throw new Error(eventData.error || "풀이를 가져오지 못했어.");
+  };
+
+  const processLine = (line) => {
+    if (!line) {
+      dispatchEvent();
+    } else if (line.startsWith("event:")) {
+      eventName = line.slice(6).trim() || "message";
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+    lines.forEach(processLine);
+  }
+  buffer += decoder.decode();
+  if (buffer) processLine(buffer);
+  dispatchEvent();
+
+  if (!completion?.success || !completion.solution) {
+    throw new Error("풀이를 끝까지 받지 못했어. 다시 시도해 줘.");
+  }
+  return completion;
+}
 
 async function postJson(path, payload) {
   let response;
