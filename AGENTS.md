@@ -1,38 +1,31 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Structure
 
-This is a small Node.js web application for generating Korean math solutions with NVIDIA Build's DeepSeek API.
+- `server.py` runs the local HTTP server, serves the allowlisted frontend files, and provides the NVIDIA API routes.
+- `index.html`, `solve.html`, `styles.css`, and `script.js` make up the browser experience.
+- `test_server.py` contains standard-library tests. `.env.example` documents local settings; never commit the real `.env` file.
 
-- `server.js` serves the static frontend and exposes `POST /api/solve`.
-- `index.html`, `styles.css`, and `script.js` contain the browser UI, styling, and form/API behavior.
-- `.env.example` documents required runtime configuration; keep actual `.env` values local and uncommitted.
-- There are currently no test or asset directories. Add tests in a dedicated `test/` directory if the project grows.
+## Run and Test
 
-## Build, Test, and Development Commands
-
-Use Node.js 20.6 or newer.
+Use Python 3.7 or newer; no package installation is required.
 
 ```bash
-npm start
+python3 server.py                 # Start at http://127.0.0.1:3000
+python3 -m unittest -v            # Run local tests; NVIDIA calls are mocked
+python3 -m py_compile server.py   # Check server syntax
 ```
 
-Starts the server with `.env` loaded and serves the app at `http://127.0.0.1:3000`.
+On Windows, use `py -3 server.py` and `py -3 -m unittest -v`. Set `NVIDIA_API_KEY` in `.env`; `NVIDIA_MODEL` and `PORT` are optional. The server binds only to `127.0.0.1` and needs internet access to contact NVIDIA.
 
-There is no build step, dependency installation requirement, or automated test script currently defined. After changing frontend or server code, run `npm start` and exercise the solve form in a browser. Confirm both successful responses and validation/API error states.
+## Style and Changes
 
-## Coding Style & Naming Conventions
+Use four spaces for Python indentation, descriptive `snake_case` names, and standard-library modules where practical. Keep browser JavaScript consistent with its existing two-space indentation and `camelCase` names. Keep student-facing text in Korean. There is no formatter or linter configured.
 
-Use two-space indentation, semicolons, double-quoted JavaScript strings, and ES modules. Prefer `const`, small focused functions, and `camelCase` names for JavaScript variables/functions. Keep user-facing messages in Korean and preserve the existing status/error handling flow. Use kebab-case for CSS classes and lowercase filenames such as `script.js` and `styles.css`. No formatter or linter is configured, so keep changes consistent with neighboring code.
+## Testing Expectations
 
-## Testing Guidelines
+Add tests to `test_server.py` using `unittest` and mock external API calls. Cover route behavior, input limits, JSON response shapes, and SSE event names. Do not put API keys or live API responses in fixtures.
 
-Automated tests are not yet configured. For manual verification, test an empty problem, a valid problem, an oversized request, a missing/invalid API key, and an unavailable API response. If adding tests, use descriptive names based on behavior and place them under `test/`.
+## Commits and Configuration
 
-## Commit & Pull Request Guidelines
-
-Git history currently contains only `Initial project upload`, so no established commit convention is available. Use concise imperative commit subjects, for example `Handle NVIDIA API errors clearly`. Pull requests should describe the behavior change, configuration impact, manual test steps, and include a screenshot for visible UI changes. Never commit `.env` or expose API keys.
-
-## Security & Configuration Tips
-
-Set `NVIDIA_API_KEY` and `NVIDIA_MODEL=deepseek-ai/deepseek-v4.1-flash` in a local `.env` file; restart the server after changing either value. Keep the key server-side—browser code must call `/api/solve`, not NVIDIA Build directly.
+Recent history uses short imperative or Conventional Commit subjects, such as `feat: add NVIDIA streaming solution flow`. Pull requests should include a behavior summary and test commands. Keep `.env`, API keys, and generated Python cache files out of commits.

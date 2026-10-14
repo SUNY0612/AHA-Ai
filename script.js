@@ -472,7 +472,7 @@ async function postSolutionStream(payload, handlers = {}) {
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error("서버에 연결하지 못했어. Node 서버가 실행 중인지 확인해 줘.");
+    throw new Error("서버에 연결하지 못했어. python3 server.py로 서버를 실행해 줘.");
   }
 
   const contentType = response.headers.get("content-type") || "";
@@ -551,7 +551,7 @@ async function postJson(path, payload) {
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error("서버에 연결하지 못했어. Node 서버가 실행 중인지 확인해 줘.");
+    throw new Error("서버에 연결하지 못했어. python3 server.py로 서버를 실행해 줘.");
   }
 
   const contentType = response.headers.get("content-type") || "";
