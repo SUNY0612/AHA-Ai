@@ -46,8 +46,36 @@
 
       <section class="solver-card" aria-label="수학 문제 풀이">
         <form id="solve-form">
-          <label class="field-label" for="problem">오늘의 문제 <span>최대 4,000자</span></label>
-          <textarea id="problem" name="problem" rows="4" maxlength="4000" placeholder="예: x^2 - 5x + 6 = 0&#10;&#10;문제의 조건과 질문도 함께 적어줘." required></textarea>
+          <label class="field-label" for="problem">오늘의 문제 <span>직접 입력하거나 사진으로 올려줘</span></label>
+          <textarea id="problem" name="problem" rows="4" maxlength="4000" placeholder="예: x^2 - 5x + 6 = 0&#10;&#10;사진을 올린 뒤 궁금한 점만 덧붙여도 돼."></textarea>
+
+          <div class="image-input-row">
+            <input id="problem-image" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment">
+            <button id="choose-image-button" class="image-upload-button" type="button" aria-controls="problem-image">
+              <span aria-hidden="true">▧</span> 사진으로 문제 올리기
+            </button>
+            <span class="image-input-hint">JPG · PNG · WEBP<br><small>사진은 풀이를 위해 NVIDIA로 전송돼. 개인정보는 가려줘.</small></span>
+          </div>
+          <div id="image-preview" class="image-preview" hidden>
+            <img id="image-preview-thumbnail" alt="올린 수학 문제 미리보기">
+            <div class="image-preview-copy">
+              <strong id="image-preview-name"></strong>
+              <small>사진 크기를 줄여 준비했어. 문제 부분이 잘리지 않았는지 확인해 줘.</small>
+            </div>
+            <button id="remove-image-button" class="remove-image-button" type="button" aria-label="올린 사진 삭제">삭제</button>
+          </div>
+
+          <div class="category-row">
+            <label class="field-label" for="problem-category">문제 분야 <span>선택 사항</span></label>
+            <select id="problem-category" name="category">
+              <option value="auto">아하가 문제를 보고 고르기</option>
+              <option value="algebra">대수 · 방정식</option>
+              <option value="geometry">도형 · 기하</option>
+              <option value="calculus">미적분</option>
+              <option value="statistics">확률 · 통계</option>
+              <option value="word-problem">문장제</option>
+            </select>
+          </div>
 
           <fieldset class="mode-picker">
             <legend>어떤 방식으로 풀어볼까?</legend>
@@ -98,6 +126,7 @@
           <div class="result-problem">
             <span class="result-label">QUESTION</span>
             <p id="result-problem-text"></p>
+            <img id="result-problem-image" class="result-problem-image" alt="풀이에 사용한 문제 사진" hidden>
           </div>
 
           <div class="chalkboard" aria-label="풀이가 천천히 적히는 칠판">

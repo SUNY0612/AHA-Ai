@@ -20,16 +20,69 @@ const rewardText = document.querySelector("#reward-text");
 const xpLabel = document.querySelector("#xp-label");
 const progressBar = document.querySelector("#progress-bar");
 const modeButtons = [...document.querySelectorAll(".mode-option")];
+const imageInput = document.querySelector("#problem-image");
+const chooseImageButton = document.querySelector("#choose-image-button");
+const imagePreview = document.querySelector("#image-preview");
+const imagePreviewThumbnail = document.querySelector("#image-preview-thumbnail");
+const imagePreviewName = document.querySelector("#image-preview-name");
+const removeImageButton = document.querySelector("#remove-image-button");
+const problemCategory = document.querySelector("#problem-category");
+const resultProblemImage = document.querySelector("#result-problem-image");
 
 const xpStorageKey = "aha-xp";
 const modeLabels = { key: "핵심만", friend: "친구처럼", hint: "힌트만" };
 let selectedMode = "friend";
 let currentMode = "friend";
 let currentProblem = "";
+let currentProblemImage = null;
+let currentCategory = "auto";
 let currentSolution = null;
 let renderSequence = 0;
 let streamingCardViews = [];
 let activeWritingElement = null;
+let imagePreparation = Promise.resolve(null);
+let imageSelectionVersion = 0;
+let imagePreparationError = "";
+
+chooseImageButton.addEventListener("click", () => imageInput.click());
+
+imageInput.addEventListener("change", () => {
+  const file = imageInput.files?.[0];
+  if (!file) return;
+
+  const selectionVersion = ++imageSelectionVersion;
+  imagePreparationError = "";
+  imagePreview.hidden = false;
+  imagePreviewThumbnail.removeAttribute("src");
+  imagePreviewName.textContent = `${file.name} · 사진 준비 중`;
+  showStatus("사진을 풀이에 맞게 준비하고 있어.", "loading");
+
+  imagePreparation = prepareProblemImage(file).then((dataUrl) => {
+    if (selectionVersion !== imageSelectionVersion) return null;
+    imagePreviewThumbnail.src = dataUrl;
+    imagePreviewName.textContent = file.name;
+    statusMessage.hidden = true;
+    return dataUrl;
+  }).catch((error) => {
+    if (selectionVersion === imageSelectionVersion) {
+      imageInput.value = "";
+      imagePreview.hidden = true;
+      imagePreparationError = error.message || "사진을 준비하지 못했어. JPG, PNG 또는 WEBP를 올려 줘.";
+      showStatus(imagePreparationError, "error");
+    }
+    return null;
+  });
+});
+
+removeImageButton.addEventListener("click", () => {
+  imageSelectionVersion += 1;
+  imagePreparationError = "";
+  imagePreparation = Promise.resolve(null);
+  imageInput.value = "";
+  imagePreview.hidden = true;
+  imagePreviewThumbnail.removeAttribute("src");
+  statusMessage.hidden = true;
+});
 
 modeButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -47,15 +100,32 @@ updateProgress();
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   currentProblem = problemInput.value.trim();
+  const submittedVersion = imageSelectionVersion;
+  const submittedImage = await imagePreparation;
 
-  if (!currentProblem) {
-    showStatus("문제를 먼저 적어줘.", "error");
-    problemInput.focus();
+  if (submittedVersion !== imageSelectionVersion) {
+    showStatus("사진이 바뀌었어. 새 사진 준비가 끝나면 다시 눌러줘.", "error");
+    return;
+  }
+  if (imagePreparationError) {
+    const message = currentProblem
+      ? "사진을 준비하지 못했어. 사진 없이 입력한 문제만 풀려면 다시 한 번 눌러줘."
+      : imagePreparationError;
+    imagePreparationError = "";
+    showStatus(message, "error");
+    return;
+  }
+
+  if (!currentProblem && !submittedImage) {
+    showStatus("문제를 적거나 사진을 올려줘.", "error");
+    if (!imageInput.files?.length) problemInput.focus();
     return;
   }
 
   solveButton.disabled = true;
   const submittedMode = selectedMode;
+  currentProblemImage = submittedImage;
+  currentCategory = problemCategory.value;
   buttonLabel.textContent = "아하가 생각 중...";
   result.hidden = true;
   reward.hidden = true;
@@ -68,12 +138,15 @@ form.addEventListener("submit", async (event) => {
     const data = await postSolutionStream({
       problem: currentProblem,
       mode: submittedMode,
+      category: currentCategory,
+      imageData: submittedImage,
     }, {
       onStarted: () => {
         streamStarted = true;
         currentMode = submittedMode;
         currentSolution = null;
-        resultProblem.textContent = currentProblem;
+        resultProblem.textContent = currentProblem || "사진 속 문제";
+        showResultProblemImage(submittedImage);
         resultMode.textContent = modeLabels[currentMode];
         checkButton.hidden = currentMode === "hint";
         checkButton.disabled = true;
@@ -90,12 +163,18 @@ form.addEventListener("submit", async (event) => {
 
     currentMode = submittedMode;
     currentSolution = data.solution;
-    resultProblem.textContent = currentProblem;
+    resultProblem.textContent = currentProblem || "사진 속 문제";
+    showResultProblemImage(submittedImage);
     resultMode.textContent = modeLabels[currentMode];
     checkButton.hidden = currentMode === "hint";
     statusMessage.hidden = true;
-    showReward();
+    const hasSolution = currentSolution.steps.length > 0 || Boolean(currentSolution.answer);
+    if (hasSolution) showReward();
     await finishStreamingBoard(currentSolution, currentMode === "hint");
+    if (!hasSolution) {
+      checkButton.hidden = true;
+      showStatus("사진에서 문제를 읽지 못했어. 글자가 선명하고 잘리지 않게 다시 올려줘.", "error");
+    }
   } catch (error) {
     if (streamStarted) {
       boardStatus.textContent = "풀이를 마저 적지 못했어.";
@@ -336,6 +415,7 @@ function createStepCard(step, index, streaming = false) {
     try {
       const data = await postJson("/api/again", {
         problem: currentProblem,
+        imageData: currentProblemImage,
         stepNumber: index + 1,
         step,
         previousAttempts: attempts.slice(-3).map((attempt) => attempt.explanation),
@@ -390,6 +470,7 @@ checkButton.addEventListener("click", async () => {
   try {
     const data = await postJson("/api/check", {
       problem: currentProblem,
+      imageData: currentProblemImage,
       solution: currentSolution,
     });
     const check = data.check;
@@ -437,6 +518,8 @@ revealAnswerButton.addEventListener("click", async () => {
     const data = await postSolutionStream({
       problem: currentProblem,
       mode: "key",
+      category: currentCategory,
+      imageData: currentProblemImage,
     }, {
       onStarted: () => {
         currentSolution = null;
@@ -602,6 +685,80 @@ function showReward() {
     ? "대단해! 오늘의 게이지를 모두 채웠어."
     : `좋아! 오늘의 게이지가 +${after - before} XP 채워졌어.`;
   reward.hidden = false;
+}
+
+function showResultProblemImage(dataUrl) {
+  if (!dataUrl) {
+    resultProblemImage.removeAttribute("src");
+    resultProblemImage.hidden = true;
+    return;
+  }
+  resultProblemImage.src = dataUrl;
+  resultProblemImage.hidden = false;
+}
+
+async function prepareProblemImage(file) {
+  const supportedTypes = ["image/jpeg", "image/png", "image/webp"];
+  const maxSourceBytes = 16 * 1024 * 1024;
+  const maxEncodedBytes = 3 * 1024 * 1024;
+  if (!supportedTypes.includes(file.type)) {
+    throw new Error("JPG, PNG 또는 WEBP 사진만 올릴 수 있어.");
+  }
+  if (file.size > maxSourceBytes) {
+    throw new Error("원본 사진이 너무 커. 16MB 이하 사진을 골라 줘.");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    const imageLoaded = new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("사진을 열 수 없어. 다른 사진을 골라 줘."));
+    });
+    image.src = objectUrl;
+    await imageLoaded;
+
+    const maxSide = 1800;
+    let scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    let canvas = document.createElement("canvas");
+    let context;
+    const drawImage = () => {
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      context = canvas.getContext("2d");
+      if (!context) throw new Error("사진을 준비하지 못했어. 다시 시도해 줘.");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    };
+    const encodeJpeg = (quality) => new Promise((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", quality);
+    });
+
+    drawImage();
+    let blob = await encodeJpeg(0.86);
+    if (!blob) throw new Error("사진을 압축하지 못했어. 다시 시도해 줘.");
+    if (blob.size > maxEncodedBytes) {
+      scale *= Math.min(0.82, Math.sqrt(maxEncodedBytes / blob.size) * 0.9);
+      drawImage();
+      blob = await encodeJpeg(0.76);
+    }
+    if (!blob || blob.size > maxEncodedBytes) {
+      throw new Error("사진이 너무 커. 문제 부분만 잘라서 다시 올려 줘.");
+    }
+
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("사진을 읽지 못했어. 다시 올려 줘."));
+      };
+      reader.onerror = () => reject(new Error("사진을 읽지 못했어. 다시 올려 줘."));
+      reader.readAsDataURL(blob);
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function wait(duration) {
